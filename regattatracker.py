@@ -23,7 +23,9 @@ import cartopy.io.shapereader as shpreader
 
 import gpxpy.parser as parser
 
+import datetime
 
+from matplotlib.lines import Line2D as Line
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 
@@ -58,20 +60,28 @@ def main():
     gpx_file.close()
 
     # find bounds
-    print('getting bounds ...')
+    print('getting spatial bounds ...')
     min_lon = min_lat = 90
     max_lon = max_lat = -90
+    min_time = datetime.datetime(year=3000, month=1, day=1)
+    max_time = datetime.datetime(year=1, month=1, day=1)
+
+
     for track in gpx.tracks:
         for segment in track.segments:
             for point in segment.points:
-                lon, lat = point.latitude, point.longitude
+                lon, lat, time = point.latitude, point.longitude, point.time
                 min_lon = min([lon, min_lon])
-                min_lat = min([lat, min_lat])
                 max_lon = max([lon, max_lon])
+                min_lat = min([lat, min_lat])
                 max_lat = max([lat, max_lat])
+                min_time = min([time, min_time])
+                max_time = max([time, max_time])
 
-    bounds = [min_lat, max_lat, min_lon, max_lon]
+    bounds = [min_lat, max_lat, min_lon, max_lon, min_time, max_time]
     print(str(bounds))
+
+    now = min_time + (max_time - min_time) / 2
 
     # Create a Stamen Terrain instance.
     print('downloading base map tiles')
@@ -84,7 +94,6 @@ def main():
 
     # Limit the extent of the map to a small longitude/latitude range.
     ax.set_extent([min_lat, max_lat, min_lon , max_lon])
-
 
     # Add the Stamen data at zoom level 8.
     ax.add_image(stamen_terrain, 12)
@@ -105,14 +114,26 @@ def main():
     #         transform=text_transform,
     #         bbox=dict(facecolor='sandybrown', alpha=0.5, boxstyle='round'))
 
+    plt.title(now.strftime("%Y-%m-%d"))
+
+    plt.annotate(str(now.strftime("%H:%M UTM")), xy=(0.5, 0.05), xycoords='axes fraction')
+
     for track in gpx.tracks:
         for segment in track.segments:
-            lons = [p.longitude for p in segment.points]
+            lons = [p.longitude for p in segment.points if p.time < now]
             lats = [p.latitude for p in segment.points]
             track = sgeom.LineString(zip(lons, lats))
             ax.add_geometries([track], ccrs.PlateCarree(),
                           facecolor='none',
                           edgecolor='black')
+
+        # Create a legend for the coastlines.
+    legend_artists = [Line([0], [0], color=color, linewidth=1)
+                      for color in ('black')]
+    legend_texts = ['S/Y Shelby']
+    legend = plt.legend(legend_artists, legend_texts, fancybox=True,
+                        loc='lower left', framealpha=0.75)
+    legend.legendPatch.set_facecolor('none')
 
     plt.show()
 
