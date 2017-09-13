@@ -1,99 +1,83 @@
 # -*- coding: utf-8 -*-
-"""
-Map tile acquisition
---------------------
-
-Demonstrates cartopy's ability to draw map tiles which are downloaded on
-demand from the Stamen tile server. Internally these tiles are then combined
-into a single image and displayed in the cartopy GeoAxes.
-
-"""
-import matplotlib.pyplot as plt
-from matplotlib.transforms import offset_copy
-
-import cartopy.crs as ccrs
-import cartopy.io.img_tiles as cimgt
-
-import matplotlib.patches as mpatches
-import matplotlib.pyplot as plt
-import shapely.geometry as sgeom
-
-import cartopy.crs as ccrs
-import cartopy.io.shapereader as shpreader
-
-import gpxpy.parser as parser
 
 import datetime
 
-from matplotlib.lines import Line2D as Line
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
-
-
-
+from matplotlib.lines import Line2D as Line
+from matplotlib.transforms import offset_copy
 from matplotlib.path import Path
 import matplotlib.patches as patches
+
+import cartopy.crs as ccrs
+import cartopy.io.img_tiles as cimgt
+import cartopy.io.shapereader as shpreader
+
+import shapely.geometry as sgeom
+
+import gpxpy.parser as parser
+
+from shiptrack import shiptrack
 
 def newline(p1, p2):
     ax = plt.gca()
     xmin, xmax = ax.get_xbound()
 
-    if(p2[0] == p1[0]):
+    if (p2[0] == p1[0]):
         xmin = xmax = p1[0]
         ymin, ymax = ax.get_ybound()
     else:
-        ymax = p1[1]+(p2[1]-p1[1])/(p2[0]-p1[0])*(xmax-p1[0])
-        ymin = p1[1]+(p2[1]-p1[1])/(p2[0]-p1[0])*(xmin-p1[0])
+        ymax = p1[1] + (p2[1] - p1[1]) / (p2[0] - p1[0]) * (xmax - p1[0])
+        ymin = p1[1] + (p2[1] - p1[1]) / (p2[0] - p1[0]) * (xmin - p1[0])
 
-    l = mlines.Line2D([xmin,xmax], [ymin,ymax])
+    l = mlines.Line2D([xmin, xmax], [ymin, ymax])
     ax.add_line(l)
     return l
 
-def main():
 
+def load_tracks(filepath):
+    pass
+
+
+def load_climatedata():
+    pass
+
+
+def load_basemapdata():
+    pass
+
+
+def render_map():
+    pass
+
+
+def main():
+    # load gpx file
     filepath = 'sample_data/shelby_cornati.gpx'
-    print('Opening file '+filepath)
+    print('Parsing file ' + filepath)
     gpx_file = open(filepath, 'r')
-    print('parsing file...')
     gpx_parser = parser.GPXParser(gpx_file)
     gpx = gpx_parser.parse()
     gpx_file.close()
 
-    # find bounds
-    print('getting spatial bounds ...')
-    min_lon = min_lat = 90
-    max_lon = max_lat = -90
-    min_time = datetime.datetime(year=3000, month=1, day=1)
-    max_time = datetime.datetime(year=1, month=1, day=1)
+    # load tracks
+    tracks = []
+    for vertices in gpx.tracks:
+        tracks.append(shiptrack(vertices))
 
-
-    for track in gpx.tracks:
-        for segment in track.segments:
-            for point in segment.points:
-                lon, lat, time = point.latitude, point.longitude, point.time
-                min_lon = min([lon, min_lon])
-                max_lon = max([lon, max_lon])
-                min_lat = min([lat, min_lat])
-                max_lat = max([lat, max_lat])
-                min_time = min([time, min_time])
-                max_time = max([time, max_time])
-
-    bounds = [min_lat, max_lat, min_lon, max_lon, min_time, max_time]
-    print(str(bounds))
-
-    now = min_time + (max_time - min_time) / 2
+    # TODO: support for multiple tracks
+    track = tracks[0]
 
     # Create a Stamen Terrain instance.
     print('downloading base map tiles')
     stamen_terrain = cimgt.StamenTerrain()
-    #stamen_terrain = cimgt.GoogleTiles()
-
     print('creating map')
+
     # Create a GeoAxes in the tile's projection.
     ax = plt.axes(projection=stamen_terrain.crs)
 
     # Limit the extent of the map to a small longitude/latitude range.
-    ax.set_extent([min_lat, max_lat, min_lon , max_lon])
+    ax.set_extent([track.min_lon, track.max_lon, track.min_lat, track.max_lat])
 
     # Add the Stamen data at zoom level 8.
     ax.add_image(stamen_terrain, 12)
@@ -105,8 +89,8 @@ def main():
     # for the Geodetic coordinate system. We will use this along with
     # matplotlib's offset_copy function to define a coordinate system which
     # translates the text by 25 pixels to the left.
-    #geodetic_transform = ccrs.Geodetic()._as_mpl_transform(ax)
-    #text_transform = offset_copy(geodetic_transform, units='dots', x=-25)
+    # geodetic_transform = ccrs.Geodetic()._as_mpl_transform(ax)
+    # text_transform = offset_copy(geodetic_transform, units='dots', x=-25)
 
     # Add text 25 pixels to the left of the volcano.
     # plt.text(-19.613333, 63.62, u'Eyjafjallajökull',
@@ -114,20 +98,19 @@ def main():
     #         transform=text_transform,
     #         bbox=dict(facecolor='sandybrown', alpha=0.5, boxstyle='round'))
 
-    plt.title(now.strftime("%Y-%m-%d"))
+    # TODO: support moving time cursor
+    time_current = track.min_time + (track.max_time - track.min_time) / 2
 
-    plt.annotate(str(now.strftime("%H:%M UTM")), xy=(0.5, 0.05), xycoords='axes fraction')
+    # add annotations to map
+    plt.title(time_current.strftime("%Y-%m-%d"))
+    plt.annotate(str(time_current.strftime("%H:%M UTM")), xy=(0.5, 0.05), xycoords='axes fraction')
 
-    for track in gpx.tracks:
-        for segment in track.segments:
-            lons = [p.longitude for p in segment.points if p.time < now]
-            lats = [p.latitude for p in segment.points]
-            track = sgeom.LineString(zip(lons, lats))
-            ax.add_geometries([track], ccrs.PlateCarree(),
-                          facecolor='none',
-                          edgecolor='black')
+    vertices = sgeom.LineString(zip(track.lons(max_time=time_current),
+                                    track.lats(max_time=time_current)))
+    ax.add_geometries([vertices], ccrs.PlateCarree(),
+                      facecolor='none',
+                      edgecolor='black')
 
-        # Create a legend for the coastlines.
     legend_artists = [Line([0], [0], color=color, linewidth=1)
                       for color in ('black')]
     legend_texts = ['S/Y Shelby']
