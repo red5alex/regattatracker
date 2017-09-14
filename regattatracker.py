@@ -2,6 +2,10 @@
 
 import datetime
 
+import numpy as np
+from moviepy.video.io.bindings import mplfig_to_npimage
+import moviepy.editor as mpy
+
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 from matplotlib.lines import Line2D as Line
@@ -18,6 +22,9 @@ import shapely.geometry as sgeom
 import gpxpy.parser as parser
 
 from shiptrack import shiptrack
+
+from cartopy.io.img_tiles import StamenTerrain
+from cached_tiler import CachedTiler
 
 def newline(p1, p2):
     ax = plt.gca()
@@ -56,12 +63,14 @@ def load_basemapdata():
     pass
 
 
-def render_map(time_current, track):
+def render_map(time_current, track, plot=False):
 
     # Get Stamen Terrain base map.
-    stamen_terrain = cimgt.StamenTerrain()
+    stamen_terrain = CachedTiler(cimgt.StamenTerrain())
 
     # set up axes
+    fig = plt.figure()
+    fig.set_size_inches(20, 10)
     ax = plt.axes(projection=stamen_terrain.crs)  # Create a GeoAxes in the tile's projection.
     ax.set_extent([track.min_lon, track.max_lon, track.min_lat, track.max_lat])  # Limit  extent to track bounding box.
     ax.add_image(stamen_terrain, 12)  # Add the Stamen data at zoom level 8.
@@ -92,13 +101,23 @@ def render_map(time_current, track):
     plt.plot(last_pos[0], last_pos[1], marker='o', color='blue', markersize=4, alpha=1, transform=ccrs.Geodetic())
 
     # finalize
-    plt.show()
+    if plot:
+        plt.show()
+    return fig
 
-def render_frame(i):
-    pass
 
-def render_movie():
-    pass
+def render_movie(time_start, time_end, duration_secs, fps, track):
+    nframes = duration_secs * fps + 2
+    dt = (time_end - time_start) / nframes
+    times = [(time_start + i*dt) for i in range(1, nframes)]
+
+    def render_frame(i):
+        time = times[int(i*fps)]
+        fig = render_map(time, track)
+        return mplfig_to_npimage(fig)
+
+    animation = mpy.VideoClip(render_frame, duration=duration_secs)
+    animation.write_videofile("kornati.mp4", fps=fps)
 
 
 def main():
@@ -108,13 +127,14 @@ def main():
 
     # TODO: support for multiple tracks
     track = tracks[0]
-    # TODO: support moving time cursor
-    time_current = track.min_time + (track.max_time - track.min_time) / 2
 
-    render_map(time_current, track)
+    half_time = track.min_time + (track.max_time - track.min_time) / 2
 
+    # show map:
+    render_map(track.max_time, track, plot=True)
 
-
+    # render movie
+    render_movie(track.min_time, track.max_time, 30, 15, track)
 
 if __name__ == '__main__':
     main()
