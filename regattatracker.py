@@ -36,24 +36,6 @@ def newline(p1, p2):
 
 
 def load_tracks(filepath):
-    pass
-
-
-def load_climatedata():
-    pass
-
-
-def load_basemapdata():
-    pass
-
-
-def render_map():
-    pass
-
-
-def main():
-    # load gpx file
-    filepath = 'sample_data/shelby_cornati.gpx'
     print('Parsing file ' + filepath)
     gpx_file = open(filepath, 'r')
     gpx_parser = parser.GPXParser(gpx_file)
@@ -64,23 +46,25 @@ def main():
     tracks = []
     for vertices in gpx.tracks:
         tracks.append(shiptrack(vertices))
+    return tracks
 
-    # TODO: support for multiple tracks
-    track = tracks[0]
+def load_climatedata():
+    pass
 
+
+def load_basemapdata():
+    pass
+
+
+def render_map(time_current, track):
     # Create a Stamen Terrain instance.
     print('downloading base map tiles')
     stamen_terrain = cimgt.StamenTerrain()
     print('creating map')
 
-    # Create a GeoAxes in the tile's projection.
-    ax = plt.axes(projection=stamen_terrain.crs)
-
-    # Limit the extent of the map to a small longitude/latitude range.
-    ax.set_extent([track.min_lon, track.max_lon, track.min_lat, track.max_lat])
-
-    # Add the Stamen data at zoom level 8.
-    ax.add_image(stamen_terrain, 12)
+    ax = plt.axes(projection=stamen_terrain.crs)  # Create a GeoAxes in the tile's projection.
+    ax.set_extent([track.min_lon, track.max_lon, track.min_lat, track.max_lat])  # Limit  extent to track bounding box.
+    ax.add_image(stamen_terrain, 12)  # Add the Stamen data at zoom level 8.
 
     # Add a marker for the Eyjafjallajökull volcano.
     # plt.plot(-19.613333, 63.62, marker='o', color='red', markersize=12, alpha=0.7, transform=ccrs.Geodetic())
@@ -98,8 +82,7 @@ def main():
     #         transform=text_transform,
     #         bbox=dict(facecolor='sandybrown', alpha=0.5, boxstyle='round'))
 
-    # TODO: support moving time cursor
-    time_current = track.min_time + (track.max_time - track.min_time) / 2
+
 
     # add annotations to map
     plt.title(time_current.strftime("%Y-%m-%d"))
@@ -109,7 +92,7 @@ def main():
                                     track.lats(max_time=time_current)))
     ax.add_geometries([vertices], ccrs.PlateCarree(),
                       facecolor='none',
-                      edgecolor='black')
+                      edgecolor='blue')
 
     legend_artists = [Line([0], [0], color=color, linewidth=1)
                       for color in ('black')]
@@ -119,6 +102,27 @@ def main():
     legend.legendPatch.set_facecolor('none')
 
     plt.show()
+
+def render_frame(i):
+    pass
+
+def render_movie():
+    pass
+
+
+def main():
+    # load gpx file
+    filepath = 'sample_data/shelby_cornati.gpx'
+    tracks = load_tracks(filepath)
+
+    # TODO: support for multiple tracks
+    track = tracks[0]
+    # TODO: support moving time cursor
+    time_current = track.min_time + (track.max_time - track.min_time) / 2
+
+    render_map(time_current, track)
+
+
 
 
 if __name__ == '__main__':
