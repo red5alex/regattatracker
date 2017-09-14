@@ -25,6 +25,9 @@ class shiptrack:
     def lats(self, max_time):
         return [v[1] for v in self.verts if v[2] < max_time]
 
+    def last_position_at_time(self, time):
+        return [ v for v in self.verts if v[2] < time][-1]
+
     def __del__(self):
         pass
 

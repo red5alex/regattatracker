@@ -57,17 +57,14 @@ def load_basemapdata():
 
 
 def render_map(time_current, track):
-    # Create a Stamen Terrain instance.
-    print('downloading base map tiles')
-    stamen_terrain = cimgt.StamenTerrain()
-    print('creating map')
 
+    # Get Stamen Terrain base map.
+    stamen_terrain = cimgt.StamenTerrain()
+
+    # set up axes
     ax = plt.axes(projection=stamen_terrain.crs)  # Create a GeoAxes in the tile's projection.
     ax.set_extent([track.min_lon, track.max_lon, track.min_lat, track.max_lat])  # Limit  extent to track bounding box.
     ax.add_image(stamen_terrain, 12)  # Add the Stamen data at zoom level 8.
-
-    # Add a marker for the Eyjafjallajökull volcano.
-    # plt.plot(-19.613333, 63.62, marker='o', color='red', markersize=12, alpha=0.7, transform=ccrs.Geodetic())
 
     # Use the cartopy interface to create a matplotlib transform object
     # for the Geodetic coordinate system. We will use this along with
@@ -76,31 +73,25 @@ def render_map(time_current, track):
     # geodetic_transform = ccrs.Geodetic()._as_mpl_transform(ax)
     # text_transform = offset_copy(geodetic_transform, units='dots', x=-25)
 
-    # Add text 25 pixels to the left of the volcano.
-    # plt.text(-19.613333, 63.62, u'Eyjafjallajökull',
-    #         verticalalignment='center', horizontalalignment='right',
-    #         transform=text_transform,
-    #         bbox=dict(facecolor='sandybrown', alpha=0.5, boxstyle='round'))
-
-
-
-    # add annotations to map
+    # Add Title, Legend, Time indicator
     plt.title(time_current.strftime("%Y-%m-%d"))
-    plt.annotate(str(time_current.strftime("%H:%M UTM")), xy=(0.5, 0.05), xycoords='axes fraction')
 
-    vertices = sgeom.LineString(zip(track.lons(max_time=time_current),
-                                    track.lats(max_time=time_current)))
-    ax.add_geometries([vertices], ccrs.PlateCarree(),
-                      facecolor='none',
-                      edgecolor='blue')
-
-    legend_artists = [Line([0], [0], color=color, linewidth=1)
-                      for color in ('black')]
-    legend_texts = ['S/Y Shelby']
-    legend = plt.legend(legend_artists, legend_texts, fancybox=True,
-                        loc='lower left', framealpha=0.75)
+    legend_artists = [Line([0], [0], color=color, linewidth=1) for color in ('blue', 'red', 'green')]
+    legend_texts = ['S/Y Shelby', 'S/Y Elixir', 'S/Y Alinghi']
+    legend = plt.legend(legend_artists, legend_texts, fancybox=True, loc='lower left', framealpha=0.75)
     legend.legendPatch.set_facecolor('none')
 
+    plt.annotate(str(time_current.strftime("%H:%M UTM")), xy=(0.5, 0.05), xycoords='axes fraction')
+
+    # Add ship track
+    vertices = sgeom.LineString(zip(track.lons(max_time=time_current), track.lats(max_time=time_current)))
+    ax.add_geometries([vertices], ccrs.PlateCarree(), facecolor='none', edgecolor='blue')
+
+    # Add a marker for the ships last location
+    last_pos = track.last_position_at_time(time_current)
+    plt.plot(last_pos[0], last_pos[1], marker='o', color='blue', markersize=4, alpha=1, transform=ccrs.Geodetic())
+
+    # finalize
     plt.show()
 
 def render_frame(i):
