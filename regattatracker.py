@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 from moviepy.video.io.bindings import mplfig_to_npimage
 import moviepy.editor as mpy
 import matplotlib.pyplot as plt
@@ -28,7 +29,8 @@ def newline(p1, p2):
     return l
 
 
-def load_tracks(filepath):
+def load_tracks(ship):
+    filepath = ship[0]
     print('Parsing file ' + filepath)
     gpx_file = open(filepath, 'r')
     gpx_parser = parser.GPXParser(gpx_file)
@@ -38,7 +40,7 @@ def load_tracks(filepath):
     # load tracks
     tracks = []
     for vertices in gpx.tracks:
-        tracks.append(ShipTrack(vertices))
+        tracks.append(ShipTrack(vertices, {"name": ship[1], "color": ship[2]}))
     return tracks
 
 
@@ -46,15 +48,28 @@ def load_climatedata():
     pass
 
 
-def render_map(time_current, track, plot=False):
+def render_map(time_current, ships, margin, plot=False):
     # Get Stamen Terrain base map.
     stamen_terrain = CachedTiler(cimgt.StamenTerrain())
+
+    min_lon = min([s[0].min_lon for s in ships])
+    max_lon = max([s[0].max_lon for s in ships])
+    min_lat = min([s[0].min_lat for s in ships])
+    max_lat = max([s[0].max_lat for s in ships])
+
+    d_lon = max_lon - min_lon
+    d_lat = max_lat - min_lat
+
+    # stop_time = max([st[0].max_time for st in ship_tracks])
 
     # set up axes
     fig = plt.figure()
     fig.set_size_inches(20, 10)
     ax = plt.axes(projection=stamen_terrain.crs)  # Create a GeoAxes in the tile's projection.
-    ax.set_extent([track.min_lon, track.max_lon, track.min_lat, track.max_lat])  # Limit  extent to track bounding box.
+    ax.set_extent([min_lon - margin * d_lon,
+                   max_lon + margin * d_lon,
+                   min_lat - margin * d_lat,
+                   max_lat + margin * d_lat])  # Limit  extent to track bounding box.
     ax.add_image(stamen_terrain, 12)  # Add the Stamen data at zoom level 8.
 
     # Use the cartopy interface to create a matplotlib transform object
@@ -67,24 +82,29 @@ def render_map(time_current, track, plot=False):
     # Add Title, Legend, Time indicator
     plt.title(time_current.strftime("%Y-%m-%d"))
 
-    legend_artists = [Line([0], [0], color=color, linewidth=1) for color in ('blue', 'red', 'green')]
-    legend_texts = ['S/Y Shelby', 'S/Y Elixir', 'S/Y Alinghi']
-    legend = plt.legend(legend_artists, legend_texts, fancybox=True, loc='lower left', framealpha=0.75)
+    ship_names = [s[0].meta["name"] for s in ships]
+    ship_colors = [s[0].meta["color"] for s in ships]
+
+    legend_artists = [Line([0], [0], color=color, linewidth=1) for color in ship_colors]
+    legend = plt.legend(legend_artists, ship_names, fancybox=True, loc='lower left', framealpha=0.75)
     legend.legendPatch.set_facecolor('none')
 
     plt.annotate(str(time_current.strftime("%H:%M UTM")), xy=(0.5, 0.05), xycoords='axes fraction')
 
-    # Add ship track
-    vertices = sgeom.LineString(zip(track.lons(max_time=time_current), track.lats(max_time=time_current)))
-    ax.add_geometries([vertices], ccrs.PlateCarree(), facecolor='none', edgecolor='blue')
+    # Add ship tracks
+    for ship in ships:
+        vertices = sgeom.LineString(zip(ship[0].lons(max_time=time_current), ship[0].lats(max_time=time_current)))
+        ax.add_geometries([vertices], ccrs.PlateCarree(), facecolor='none', edgecolor=ship[0].meta["color"])
 
-    # Add a marker for the ships last location
-    last_pos = track.last_position_at_time(time_current)
-    last_info = track.last_info_at_time(time_current)
-    plt.plot(last_pos[0], last_pos[1], marker=(3, 0, last_info[0]), color='blue', markersize=5, alpha=1,
-             transform=ccrs.PlateCarree())
+        # Add a marker for the ships last location
+        last_pos = ship[0].last_position_at_time(time_current)
+        last_info = ship[0].last_info_at_time(time_current)
+        plt.plot(last_pos[0], last_pos[1], marker=(3, 0, last_info[0]), color=ship[0].meta["color"], markersize=5,
+                 alpha=1,
+                 transform=ccrs.PlateCarree())
 
-    plt.annotate("Shelby: {:.1f} kts".format(last_info[1] * 1.94384), xy=(0.9, 0.05), xycoords='axes fraction')
+    # plt.annotate("Shelby: {:.1f} kts".format(last_info[1] * 1.94384), xy=(0.9, 0.05), xycoords='axes fraction')
+    # plt.annotate("Elixir: {:.1f} kts".format(last_info[1] * 1.94384), xy=(0.9, 0.05), xycoords='axes fraction')
 
     # finalize
     if plot:
@@ -92,35 +112,45 @@ def render_map(time_current, track, plot=False):
     return fig
 
 
-def render_movie(time_start, time_end, duration_secs, fps, track):
+def render_movie(time_start, time_end, duration_secs, fps, ships, filename, margin):
     nframes = duration_secs * fps + 2
     dt = (time_end - time_start) / nframes
     times = [(time_start + i * dt) for i in range(1, nframes)]
 
     def render_frame(f):
         time = times[int(f * fps)]
-        fig = render_map(time, track)
+        fig = render_map(time, ships, margin)
         return mplfig_to_npimage(fig)
 
     animation = mpy.VideoClip(render_frame, duration=duration_secs)
-    animation.write_videofile("kornati.mp4", fps=fps)
+    animation.write_videofile(filename, fps=fps)
 
 
-def main():
+def main(ship_info, margin=0.05, showplot=True, export_movie_to=None, duration=30, fps=15):
     # load gpx file
-    filepath = 'sample_data/shelby_cornati.gpx'
-    tracks = load_tracks(filepath)
+    ships = []
+    for ship in ship_info:
+        print('loading file ' + ship[0])
+        ships.append(load_tracks(ship))
 
-    # TODO: support for multiple tracks
-    track = tracks[0]
-
-    # show map:
-    half_time = track.min_time + (track.max_time - track.min_time) / 2
-    render_map(half_time, track, plot=True)
+    start_time = min([s[0].min_time for s in ships])
+    stop_time = max([s[0].max_time for s in ships])
 
     # render movie
-    render_movie(track.min_time, track.max_time, 30, 15, track)
+    if export_movie_to is not None:
+        render_movie(start_time, stop_time, duration, fps, ships, export_movie_to, margin)
+
+    # render map
+    if showplot:
+        render_map(stop_time, ships, margin, plot=True)
 
 
 if __name__ == '__main__':
-    main()
+    # Script Parameters
+    duration_sec = 45  # duration of the movie in seconds
+    ship_info = [('sample_data/shelby_cornati.gpx', 'S/Y Shelby', 'blue'),
+                 ('sample_data/elixir_cornati.gpx', 'S/Y Elixir', 'red')]
+    filename = "kornati.mp4"
+
+    # Script execution
+    main(ship_info, duration=duration_sec, export_movie_to=filename)

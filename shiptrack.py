@@ -28,7 +28,8 @@ def calculate_initial_compass_bearing(point_a, point_b):
 
 
 class ShipTrack:
-    def __init__(self, gpx_track):
+    def __init__(self, gpx_track, meta={}):
+        self.meta = meta
         self.min_lon = self.min_lat = 90
         self.max_lon = self.max_lat = -90
         self.min_time = datetime.datetime(year=3000, month=1, day=1)
@@ -69,7 +70,10 @@ class ShipTrack:
         return [v[1] for v in self.verts if v[2] < max_time]
 
     def last_position_at_time(self, time, increment=0):
-        return [v for v in self.verts if v[2] < time][-1 - increment]
+        try:
+            return [v for v in self.verts if v[2] < time][-1 - increment]
+        except IndexError:
+            return (self.verts[0])
 
     def last_info_at_time(self, time):
         index = len([v for v in self.verts if v[2] < time]) - 1
