@@ -49,8 +49,19 @@ def load_climatedata():
 
 
 def render_map(time_current, ships, margin, plot=False):
-    # Get Stamen Terrain base map.
-    stamen_terrain = CachedTiler(cimgt.StamenTerrain())
+
+    # Get base map
+    # cimgt.StamenTerrain() zoom-level 12 or 13
+    # cimgt.GoogleTiles(style="satellite")
+    # cimgt.GoogleTiles(style="terrain")
+    # cimgt.MapboxTiles ! (More args required)
+    # cimgt.MapQuestOpenAerial (Error downloading tiles)
+    # cimgt.MapQuestOSM
+    # cimgt.QuadtreeTiles
+    # cimgt.OSM
+
+    basemap_tiles = CachedTiler(cimgt.StamenTerrain())
+    zoom_level = 12
 
     min_lon = min([s[0].min_lon for s in ships])
     max_lon = max([s[0].max_lon for s in ships])
@@ -60,17 +71,15 @@ def render_map(time_current, ships, margin, plot=False):
     d_lon = max_lon - min_lon
     d_lat = max_lat - min_lat
 
-    # stop_time = max([st[0].max_time for st in ship_tracks])
-
     # set up axes
     fig = plt.figure()
     fig.set_size_inches(20, 10)
-    ax = plt.axes(projection=stamen_terrain.crs)  # Create a GeoAxes in the tile's projection.
+    ax = plt.axes(projection=basemap_tiles.crs)  # Create a GeoAxes in the tile's projection.
     ax.set_extent([min_lon - margin * d_lon,
                    max_lon + margin * d_lon,
                    min_lat - margin * d_lat,
                    max_lat + margin * d_lat])  # Limit  extent to track bounding box.
-    ax.add_image(stamen_terrain, 12)  # Add the Stamen data at zoom level 8.
+    ax.add_image(basemap_tiles, zoom_level)  # Add the basemap data at zoom level 8.
 
     # Use the cartopy interface to create a matplotlib transform object
     # for the Geodetic coordinate system. We will use this along with
@@ -119,7 +128,7 @@ def render_movie(time_start, time_end, duration_secs, fps, ships, filename, marg
 
     def render_frame(f):
         time = times[int(f * fps)]
-        fig = render_map(time, ships, margin)
+        fig = render_map(time, ships, margin, plot=False)
         return mplfig_to_npimage(fig)
 
     animation = mpy.VideoClip(render_frame, duration=duration_secs)
@@ -142,15 +151,17 @@ def main(ship_info, margin=0.05, showplot=True, export_movie_to=None, duration=3
 
     # render map
     if showplot:
-        render_map(stop_time, ships, margin, plot=True)
+        pass
+        #render_map(stop_time, ships, margin, plot=True)
 
 
 if __name__ == '__main__':
     # Script Parameters
     duration_sec = 45  # duration of the movie in seconds
+    fps = 15
     ship_info = [('sample_data/shelby_cornati.gpx', 'S/Y Shelby', 'blue'),
                  ('sample_data/elixir_cornati.gpx', 'S/Y Elixir', 'red')]
     filename = "kornati.mp4"
 
     # Script execution
-    main(ship_info, duration=duration_sec, export_movie_to=filename)
+    main(ship_info, duration=duration_sec, export_movie_to=filename, fps=fps)
