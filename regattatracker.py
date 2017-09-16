@@ -1,36 +1,22 @@
 # -*- coding: utf-8 -*-
-
-import datetime
-
-import numpy as np
 from moviepy.video.io.bindings import mplfig_to_npimage
 import moviepy.editor as mpy
-
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 from matplotlib.lines import Line2D as Line
-from matplotlib.transforms import offset_copy
-from matplotlib.path import Path
-import matplotlib.patches as patches
-
 import cartopy.crs as ccrs
 import cartopy.io.img_tiles as cimgt
-import cartopy.io.shapereader as shpreader
-
 import shapely.geometry as sgeom
-
 import gpxpy.parser as parser
-
-from shiptrack import shiptrack
-
-from cartopy.io.img_tiles import StamenTerrain
 from cached_tiler import CachedTiler
+from shiptrack import ShipTrack
+
 
 def newline(p1, p2):
     ax = plt.gca()
     xmin, xmax = ax.get_xbound()
 
-    if (p2[0] == p1[0]):
+    if p2[0] == p1[0]:
         xmin = xmax = p1[0]
         ymin, ymax = ax.get_ybound()
     else:
@@ -52,19 +38,15 @@ def load_tracks(filepath):
     # load tracks
     tracks = []
     for vertices in gpx.tracks:
-        tracks.append(shiptrack(vertices))
+        tracks.append(ShipTrack(vertices))
     return tracks
+
 
 def load_climatedata():
     pass
 
 
-def load_basemapdata():
-    pass
-
-
 def render_map(time_current, track, plot=False):
-
     # Get Stamen Terrain base map.
     stamen_terrain = CachedTiler(cimgt.StamenTerrain())
 
@@ -98,7 +80,11 @@ def render_map(time_current, track, plot=False):
 
     # Add a marker for the ships last location
     last_pos = track.last_position_at_time(time_current)
-    plt.plot(last_pos[0], last_pos[1], marker='o', color='blue', markersize=4, alpha=1, transform=ccrs.Geodetic())
+    last_info = track.last_info_at_time(time_current)
+    plt.plot(last_pos[0], last_pos[1], marker=(3, 0, last_info[0]), color='blue', markersize=5, alpha=1,
+             transform=ccrs.PlateCarree())
+
+    plt.annotate("Shelby: {:.1f} kts".format(last_info[1] * 1.94384), xy=(0.9, 0.05), xycoords='axes fraction')
 
     # finalize
     if plot:
@@ -109,10 +95,10 @@ def render_map(time_current, track, plot=False):
 def render_movie(time_start, time_end, duration_secs, fps, track):
     nframes = duration_secs * fps + 2
     dt = (time_end - time_start) / nframes
-    times = [(time_start + i*dt) for i in range(1, nframes)]
+    times = [(time_start + i * dt) for i in range(1, nframes)]
 
-    def render_frame(i):
-        time = times[int(i*fps)]
+    def render_frame(f):
+        time = times[int(f * fps)]
         fig = render_map(time, track)
         return mplfig_to_npimage(fig)
 
@@ -128,13 +114,13 @@ def main():
     # TODO: support for multiple tracks
     track = tracks[0]
 
-    half_time = track.min_time + (track.max_time - track.min_time) / 2
-
     # show map:
-    render_map(track.max_time, track, plot=True)
+    half_time = track.min_time + (track.max_time - track.min_time) / 2
+    render_map(half_time, track, plot=True)
 
     # render movie
     render_movie(track.min_time, track.max_time, 30, 15, track)
+
 
 if __name__ == '__main__':
     main()
